@@ -42,13 +42,14 @@ def get_chart_options(analysis_type, var_types):
         ],
         'categorical_numeric': [
             {'label': '箱形圖', 'value': 'box'},
-            {'label': '小提琴圖', 'value': 'violin'}
+            {'label': '小提琴圖', 'value': 'violin'},
+            {'label': '分組散點圖', 'value': 'grouped_scatter'}
         ],
         'numeric_categorical': [
             {'label': '箱形圖', 'value': 'box'},
-            {'label': '小提琴圖', 'value': 'violin'}
+            {'label': '小提琴圖', 'value': 'violin'},
+            {'label': '分組散點圖', 'value': 'grouped_scatter'}
         ]
-        # ... 其他變量組合的圖表選項 ...
     }
     
     if analysis_type == 'univariate':
@@ -184,6 +185,36 @@ def create_kde_for_categorical(values, weights):
     
     return x_kde, y_kde
 
+def add_trendline(fig, df, x_col, y_col):
+    """添加趨勢線到散佈圖"""
+    # 移除遺漏值
+    data = df[[x_col, y_col]].dropna()
+    x = data[x_col].values
+    y = data[y_col].values
+    
+    # 計算線性回歸
+    coeffs = np.polyfit(x, y, 1)
+    line = np.poly1d(coeffs)
+    r_squared = np.corrcoef(x, y)[0, 1]**2
+    
+    # 生成趨勢線的 x 值
+    x_trend = np.linspace(x.min(), x.max(), 100)
+    
+    # 添加趨勢線
+    fig.add_trace(go.Scatter(
+        x=x_trend,
+        y=line(x_trend),
+        mode='lines',
+        name=f'趨勢線 (R² = {r_squared:.3f})',
+        line=dict(color='red', dash='dash'),
+        hovertemplate=(
+            f'方程式: y = {coeffs[0]:.3f}x + {coeffs[1]:.3f}<br>'
+            f'R² = {r_squared:.3f}<extra></extra>'
+        )
+    ))
+    
+    return fig
+
 def generate_plot(df, analysis_type, primary_var, chart_type, secondary_var=None):
     """根據選擇生成適當的圖表"""
     try:
@@ -310,6 +341,35 @@ def generate_plot(df, analysis_type, primary_var, chart_type, secondary_var=None
 
         # 雙變量分析
         elif analysis_type == 'bivariate' and secondary_var:
+            # 檢查唯一值數量
+            primary_unique = df[primary_var].nunique()
+            secondary_unique = df[secondary_var].nunique()
+            
+            # 創建警告圖表的函數
+            def create_warning_figure(var_name, unique_count):
+                fig = go.Figure()
+                fig.add_annotation(
+                    text=f"變數 '{var_name}' 有 {unique_count} 個唯一值<br>因唯一值數量過多，無法顯示圖表",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                    font=dict(size=14)
+                )
+                fig.update_layout(
+                    title=f'{primary_var} vs {secondary_var} - 無法顯示圖表',
+                    showlegend=False
+                )
+                return fig
+            
+            # 檢查類別型變數的唯一值數量
+            if primary_type == 'categorical' and primary_unique > 20:
+                return create_warning_figure(primary_var, primary_unique)
+            if secondary_type == 'categorical' and secondary_unique > 20:
+                return create_warning_figure(secondary_var, secondary_unique)
+
+            # 原有的圖表邏輯
             if primary_type == 'categorical' and secondary_type == 'categorical':
                 cross_tab = pd.crosstab(df[primary_var], df[secondary_var])
                 if chart_type == 'heatmap':
@@ -365,7 +425,14 @@ def generate_plot(df, analysis_type, primary_var, chart_type, secondary_var=None
                     fig = px.bar(cross_tab)  # default
             elif (primary_type == 'numeric' and secondary_type == 'numeric'):
                 if chart_type == 'scatter':
+                    # 創建基本散佈圖
                     fig = px.scatter(df, x=primary_var, y=secondary_var)
+                    # 添加趨勢線
+                    fig = add_trendline(fig, df, primary_var, secondary_var)
+                    # 更新圖表標題以反映趨勢線
+                    fig.update_layout(
+                        title=f'{primary_var} vs {secondary_var} (含趨勢線)'
+                    )
                 else:
                     fig = px.scatter(df, x=primary_var, y=secondary_var) #default
             elif (primary_type == 'categorical' and secondary_type == 'numeric'):
@@ -373,6 +440,18 @@ def generate_plot(df, analysis_type, primary_var, chart_type, secondary_var=None
                     fig = px.box(df, x=primary_var, y=secondary_var)
                 elif chart_type == 'violin':
                     fig = px.violin(df, x=primary_var, y=secondary_var)
+                elif chart_type == 'grouped_scatter':
+                    # 為每個類別創建散點圖
+                    fig = px.scatter(df, 
+                                   x=df.groupby(primary_var).cumcount(),  # 使用序號作為x軸
+                                   y=secondary_var,
+                                   color=primary_var,
+                                   title=f'{primary_var} vs {secondary_var} (分組散點圖)')
+                    fig.update_layout(
+                        xaxis_title='數據點序號',
+                        yaxis_title=secondary_var,
+                        showlegend=True
+                    )
                 else:
                     fig = px.box(df, x=primary_var, y=secondary_var) #default
             elif (primary_type == 'numeric' and secondary_type == 'categorical'):
@@ -380,6 +459,18 @@ def generate_plot(df, analysis_type, primary_var, chart_type, secondary_var=None
                     fig = px.box(df, x=secondary_var, y=primary_var)
                 elif chart_type == 'violin':
                     fig = px.violin(df, x=secondary_var, y=primary_var)
+                elif chart_type == 'grouped_scatter':
+                    # 為每個類別創建散點圖
+                    fig = px.scatter(df, 
+                                   x=df.groupby(secondary_var).cumcount(),  # 使用序號作為x軸
+                                   y=primary_var,
+                                   color=secondary_var,
+                                   title=f'{primary_var} vs {secondary_var} (分組散點圖)')
+                    fig.update_layout(
+                        xaxis_title='數據點序號',
+                        yaxis_title=primary_var,
+                        showlegend=True
+                    )
                 else:
                     fig = px.box(df, x=secondary_var, y=primary_var) #default
             else:
