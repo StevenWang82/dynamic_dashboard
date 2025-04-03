@@ -1,0 +1,12 @@
+dashboard_project/
+├── app.py                 # 主應用程式
+├── assets/               # 靜態檔案 (CSS, images)
+├── components/           # Dash 組件
+│   ├── __init__.py
+│   ├── data_upload.py    # 數據上傳組件
+│   └── visualizations.py # 視覺化組件
+├── data/                # 數據暫存
+├── utils/              # 工具函數
+│   ├── __init__.py
+│   └── data_processing.py
+└── requirements.txt     # 已提供
