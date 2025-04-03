@@ -25,72 +25,78 @@ def detect_date_columns(df):
     return potential_date_cols
 
 def create_date_controls(df):
-    """創建日期轉換的控制元件"""
+    """創建日期轉換的模態對話框控制元件"""
     date_cols = detect_date_columns(df)
     
     return html.Div([
-        dbc.Card([
-            dbc.CardHeader("日期欄位轉換"),
-            dbc.CardBody([
+        # 觸發按鈕
+        dbc.Button(
+            "日期欄位轉換",
+            id="open-date-modal",
+            color="primary",
+            className="mb-3"
+        ),
+        
+        # 模態對話框
+        dbc.Modal([
+            dbc.ModalHeader("日期欄位轉換"),
+            dbc.ModalBody([
                 # 自動檢測結果顯示
-                html.Div([
-                    dbc.Alert(
-                        "自動檢測到以下可能的日期欄位" if date_cols else "未自動檢測到日期欄位，請手動選擇需要轉換的欄位",
-                        color="info" if date_cols else "warning",
-                        className="mb-3"
-                    ),
-                ]),
+                dbc.Alert(
+                    "自動檢測到以下可能的日期欄位" if date_cols else "未自動檢測到日期欄位，請手動選擇需要轉換的欄位",
+                    color="info" if date_cols else "warning",
+                    className="mb-3"
+                ),
                 
                 # 欄位選擇區域
                 html.H6("選擇要轉換的欄位："),
                 dcc.Checklist(
                     id='date-columns-checklist',
                     options=[{'label': col, 'value': col} for col in df.columns],
-                    value=date_cols,  # 預設選中自動檢測到的欄位
+                    value=date_cols,
                     className='mb-3'
                 ),
                 
                 # 日期格式輸入區域
-                html.Div([
-                    html.H6("日期格式設定"),
-                    dbc.Row([
-                        dbc.Col([
-                            dbc.Input(
-                                id='date-format-input',
-                                type='text',
-                                placeholder='例如：%Y-%m-%d',
-                                className='mb-2'
-                            ),
-                            html.Small(
-                                [
-                                    "常用格式：",
-                                    html.Br(),
-                                    "%Y-%m-%d (2023-12-31)",
-                                    html.Br(),
-                                    "%Y/%m/%d (2023/12/31)",
-                                    html.Br(),
-                                    "%d/%m/%Y (31/12/2023)",
-                                    html.Br(),
-                                    "%Y%m%d (20231231)"
-                                ],
-                                className="text-muted"
-                            )
-                        ], width=12)
-                    ]),
-                ], className='mb-3'),
+                html.H6("日期格式設定"),
+                dbc.Input(
+                    id='date-format-input',
+                    type='text',
+                    placeholder='例如：%Y-%m-%d',
+                    className='mb-2'
+                ),
+                html.Small(
+                    [
+                        "常用格式：",
+                        html.Br(),
+                        "%Y-%m-%d (2023-12-31)",
+                        html.Br(),
+                        "%Y/%m/%d (2023/12/31)",
+                        html.Br(),
+                        "%d/%m/%Y (31/12/2023)",
+                        html.Br(),
+                        "%Y%m%d (20231231)"
+                    ],
+                    className="text-muted mb-3"
+                ),
                 
-                # 轉換按鈕和狀態顯示
-                html.Div([
-                    dbc.Button(
-                        "轉換日期",
-                        id='convert-dates-button',
-                        color="primary",
-                        className="me-2"
-                    ),
-                    html.Div(id='date-conversion-status')
-                ])
+                # 轉換狀態顯示
+                html.Div(id='date-conversion-status')
+            ]),
+            dbc.ModalFooter([
+                dbc.Button(
+                    "轉換",
+                    id="convert-dates-button",
+                    color="primary",
+                    className="me-2"
+                ),
+                dbc.Button(
+                    "關閉",
+                    id="close-date-modal",
+                    color="secondary"
+                )
             ])
-        ])
+        ], id="date-modal", size="lg")
     ])
 
 def convert_dates(df, date_columns, date_format=None):
@@ -189,4 +195,5 @@ def generate_conversion_report(results):
         )
     
     return html.Div(report_elements)
+
 

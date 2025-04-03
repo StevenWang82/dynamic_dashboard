@@ -72,8 +72,8 @@ app.layout = dbc.Container([
 ], fluid=True)
 
 @app.callback(
-    [Output('output-data-upload', 'children'),
-     Output('stored-data', 'data', allow_duplicate=True),  # 添加 allow_duplicate=True
+    [Output('output-data-upload', 'children', allow_duplicate=True),
+     Output('stored-data', 'data', allow_duplicate=True),
      Output('analysis-section', 'style')],
     [Input('upload-data', 'contents')],
     [State('upload-data', 'filename')],
@@ -246,31 +246,89 @@ def update_visualization(analysis_type, primary_var, secondary_var, chart_type, 
 
 # 添加新的回調函數處理日期轉換
 @app.callback(
-    [Output('stored-data', 'data', allow_duplicate=True),  # 添加 allow_duplicate=True
-     Output('date-conversion-status', 'children')],
+    [Output('stored-data', 'data', allow_duplicate=True),
+     Output('date-conversion-status', 'children'),
+     Output('output-data-upload', 'children', allow_duplicate=True)],  # 添加 allow_duplicate=True
     [Input('convert-dates-button', 'n_clicks')],
     [State('date-columns-checklist', 'value'),
      State('date-format-input', 'value'),
      State('stored-data', 'data')],
-    prevent_initial_call=True  # 防止初始觸發
+    prevent_initial_call=True
 )
 def process_date_conversion(n_clicks, date_columns, date_format, stored_data):
-    if n_clicks is None or not date_columns:
-        return dash.no_update, None  # 使用 dash.no_update 而不是 stored_data
+    if n_clicks is None:
+        return dash.no_update, None, dash.no_update
         
-    # 讀取數據
-    df = pd.read_json(io.StringIO(stored_data), orient='split')
+    if not date_columns:
+        return dash.no_update, dbc.Alert(
+            "請選擇至少一個要轉換的欄位",
+            color="warning",
+            duration=4000
+        ), dash.no_update
+        
+    try:
+        # 讀取數據
+        df = pd.read_json(io.StringIO(stored_data), orient='split')
+        
+        # 執行轉換
+        df_converted, results = convert_dates(df, date_columns, date_format)
+        
+        # 生成報告
+        report = generate_conversion_report(results)
+        
+        # 如果沒有成功轉換任何欄位，不更新數據
+        if not results['success']:
+            return dash.no_update, report, dash.no_update
+        
+        # 更新存儲的數據
+        new_stored_data = df_converted.to_json(date_format='iso', orient='split')
+        
+        # 生成新的數據預覽
+        new_preview = generate_data_preview(df_converted)
+        
+        # 添加日期轉換按鈕到預覽下方
+        preview_with_button = html.Div([
+            new_preview,
+            html.Hr(),
+            create_date_controls(df_converted)
+        ])
+        
+        return new_stored_data, report, preview_with_button
+        
+    except Exception as e:
+        error_alert = dbc.Alert(
+            f"轉換過程中發生錯誤: {str(e)}",
+            color="danger",
+            duration=4000
+        )
+        return dash.no_update, error_alert, dash.no_update
+
+# 添加模態對話框的開關回調
+@app.callback(
+    Output("date-modal", "is_open"),
+    [Input("open-date-modal", "n_clicks"),
+     Input("close-date-modal", "n_clicks"),
+     Input("convert-dates-button", "n_clicks")],
+    [State("date-modal", "is_open"),
+     State("date-conversion-status", "children")],
+    prevent_initial_call=True
+)
+def toggle_date_modal(open_clicks, close_clicks, convert_clicks, is_open, conversion_status):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return is_open
     
-    # 執行轉換
-    df_converted, results = convert_dates(df, date_columns, date_format)
+    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
     
-    # 生成報告
-    report = generate_conversion_report(results)
-    
-    # 更新存儲的數據
-    new_stored_data = df_converted.to_json(date_format='iso', orient='split')
-    
-    return new_stored_data, report
+    if trigger_id == "open-date-modal":
+        return True
+    elif trigger_id == "close-date-modal":
+        return False
+    elif trigger_id == "convert-dates-button":
+        # 只有在轉換成功時才關閉模態框
+        if conversion_status and "success" in str(conversion_status):
+            return False
+    return is_open
 
 if __name__ == '__main__':
     app.run_server(debug=True)
