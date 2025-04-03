@@ -12,6 +12,7 @@ from components.visualizations import (
 )
 import pandas as pd
 import io
+from utils.date_processing import create_date_controls, convert_dates, generate_conversion_report
 
 # 初始化 Dash 應用
 app = dash.Dash(__name__, 
@@ -72,10 +73,11 @@ app.layout = dbc.Container([
 
 @app.callback(
     [Output('output-data-upload', 'children'),
-     Output('stored-data', 'data'),
-     Output('analysis-section', 'style')],  # 新增輸出
-    Input('upload-data', 'contents'),
-    State('upload-data', 'filename')
+     Output('stored-data', 'data', allow_duplicate=True),  # 添加 allow_duplicate=True
+     Output('analysis-section', 'style')],
+    [Input('upload-data', 'contents')],
+    [State('upload-data', 'filename')],
+    prevent_initial_call=True  # 防止初始觸發
 )
 def update_output(contents, filename):
     if contents is None:
@@ -90,11 +92,17 @@ def update_output(contents, filename):
     # 生成預覽
     preview = generate_data_preview(df)
     
+    # 添加日期轉換控制元件
+    date_controls = create_date_controls(df)
+    
     # 將數據存儲為 JSON
     stored_data = df.to_json(date_format='iso', orient='split')
     
-    # 顯示分析區域
-    return preview, stored_data, {'display': 'block'}
+    return html.Div([
+        preview,
+        html.Hr(),
+        date_controls
+    ]), stored_data, {'display': 'block'}
 
 @app.callback(
     Output('visualization-controls', 'children'),
@@ -235,6 +243,34 @@ def update_visualization(analysis_type, primary_var, secondary_var, chart_type, 
     except Exception as e:
         print(f"Error in update_visualization: {str(e)}")
         return empty_fig
+
+# 添加新的回調函數處理日期轉換
+@app.callback(
+    [Output('stored-data', 'data', allow_duplicate=True),  # 添加 allow_duplicate=True
+     Output('date-conversion-status', 'children')],
+    [Input('convert-dates-button', 'n_clicks')],
+    [State('date-columns-checklist', 'value'),
+     State('date-format-input', 'value'),
+     State('stored-data', 'data')],
+    prevent_initial_call=True  # 防止初始觸發
+)
+def process_date_conversion(n_clicks, date_columns, date_format, stored_data):
+    if n_clicks is None or not date_columns:
+        return dash.no_update, None  # 使用 dash.no_update 而不是 stored_data
+        
+    # 讀取數據
+    df = pd.read_json(io.StringIO(stored_data), orient='split')
+    
+    # 執行轉換
+    df_converted, results = convert_dates(df, date_columns, date_format)
+    
+    # 生成報告
+    report = generate_conversion_report(results)
+    
+    # 更新存儲的數據
+    new_stored_data = df_converted.to_json(date_format='iso', orient='split')
+    
+    return new_stored_data, report
 
 if __name__ == '__main__':
     app.run_server(debug=True)

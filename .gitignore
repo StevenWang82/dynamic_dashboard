@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv
+env/
+venv/
+/dist
+/build
+*.egg-info
+
+
+# 日誌檔案
+*.log
+
+# 暫存檔案
+*.tmp
+temp/
+tmp/
+/temp
+/tmp
