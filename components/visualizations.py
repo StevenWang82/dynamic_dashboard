@@ -19,7 +19,9 @@ def get_chart_options(analysis_type, var_types):
     """根據分析類型和變量類型返回可用的圖表選項"""
     univariate_charts = {
         'numeric': [
-            {'label': '直方圖+KDE', 'value': 'histogram_kde'}
+            {'label': '直方圖+KDE', 'value': 'histogram_kde'},
+            {'label': '箱形圖', 'value': 'box'},
+            {'label': '小提琴圖', 'value': 'violin'}
         ],
         'categorical': [
             {'label': '柱狀圖', 'value': 'bar'},
@@ -232,7 +234,16 @@ def generate_plot(df, analysis_type, primary_var, chart_type, secondary_var=None
 
         # 單變量分析
         if analysis_type == 'univariate':
-            if primary_type == 'categorical':
+            if primary_type == 'numeric':
+                if chart_type == 'histogram_kde':
+                    fig = create_histogram_kde(df, primary_var)
+                elif chart_type == 'box':
+                    fig = px.box(df, y=primary_var, title=f'{primary_var} 的箱形圖')
+                elif chart_type == 'violin':
+                    fig = px.violin(df, y=primary_var, title=f'{primary_var} 的小提琴圖')
+                else:
+                    fig = px.histogram(df, x=primary_var)
+            else:
                 # 獲取唯一值數量
                 unique_values = df[primary_var].nunique()
                 value_counts = df[primary_var].value_counts()
@@ -332,12 +343,6 @@ def generate_plot(df, analysis_type, primary_var, chart_type, secondary_var=None
                     fig = px.treemap(df, path=[primary_var])
                 else:
                     fig = px.bar(df, x=primary_var)  # 默認圖表
-            else:
-                # 修正：當 chart_type 為 'histogram_kde' 時，調用 create_histogram_kde
-                if chart_type == 'histogram_kde':
-                    fig = create_histogram_kde(df, primary_var)
-                else:
-                    fig = px.histogram(df, x=primary_var)
 
         # 雙變量分析
         elif analysis_type == 'bivariate' and secondary_var:
